@@ -1,0 +1,236 @@
+# Alpha Diversity
+
+library("tidyverse")
+library("reshape2")    # Load the reshape2 package for converting between long and wide format data
+library("stringr")     # Load the stringr package for improved filtering of text
+library("ape")         # Load the ape package for reading and modifying phylogenetic trees
+library("phyloseq")    # Load the phyloseq package for microbial community analysis
+library("data.table")  # Load the data.table package for better metadata manipulation
+library("viridis")     # Load the viridis package for colour palettes for continuous data
+library("qualpalr")    # Load the qualpalr package for colour palettes for qualitative data
+library("ggplot2")     # load the ggplot2 package for visualization of data
+library("vegan")       # 
+library("gplots")      #
+library("ggpubr")      #
+library("ggforce")
+library("plyr")
+library("lattice")
+library("Rmisc")
+library("funrar")
+library("permute")
+library("vegan")
+library("readr")
+library("forcats")
+library("RColorBrewer")
+library("ade4")
+library("cluster")
+library("clue")
+library("dada2")
+library("permute")
+library("broom")
+library("viridisLite")
+library("seqinr")
+library("ShortRead")
+library("Biostrings")
+library("VennDiagram")
+library("DESeq2")
+#library("ggtree")
+library("aplot")
+library("tidyr")
+library("ggimage")
+library("lubridate")    #Add vertical line in time serie plot
+library("onewaytests")
+library("cowplot")
+library("qpdf")
+library("car")
+library("rstatix")
+library("emmeans")
+library("iNEXT")
+library("metagMisc")
+
+#coverage-based rarefaction phyloseq objects
+project_data_coverage_based <- readRDS(file="filtered_250_coverage_rarefied_averaged.RDS")
+
+
+##############coverage BASED##################
+
+####Making dataframe for each timepoint containing alpha diveristy metrics####
+
+sample_df <- data.frame(sample_data(project_data_coverage_based))
+otu <- otu_table(t(project_data_coverage_based))
+Shannon <- diversity(otu, index = "shannon", MARGIN = 1, base = exp(1))
+simpson <- diversity(otu, index = "simpson", MARGIN = 1, base = exp(1))
+otu[otu >0] <- 1
+number_ASVs <- rowSums(otu)
+meta_alpha_coverage_based <- cbind(sample_df,Shannon,number_ASVs,simpson)
+meta_alpha_coverage_based$ <- gsub("", "", meta_alpha_coverage_based$)
+meta_alpha_coverage_based$ <- factor(meta_alpha_coverage_based$, levels=c("", ""))
+
+meta_alpha_coverage_based$ <- factor(meta_alpha_coverage_based$, levels=c("", ""))
+##SHANNON##
+
+#Outliers
+
+outlier_tbl <- meta_alpha_coverage_based %>%
+  group_by(,) %>%
+  identify_outliers(Shannon)
+
+to_remove <- as.character(outlier_tbl[outlier_tbl$is.extreme==TRUE,]$SampleID)  #create a value that contains samples to remove 
+
+meta_alpha_filtered <- subset(meta_alpha_coverage_based, ! SampleID %in% to_remove)
+
+#Statisitical analysis
+
+meta_alpha_filtered
+
+Shapiro_results_coverage_based <- as.data.frame(meta_alpha_filtered %>%
+                                              group_by(,) %>%
+                                              shapiro_test(Shannon))
+
+Levenes_results_coverage_based <- as.data.frame(meta_alpha_filtered %>% 
+                                              levene_test(Shannon ~ *))
+
+
+res.aov_coverage_based <- aov(Shannon ~ *, data = meta_alpha_filtered)
+summary(res.aov_coverage_based)
+
+#Graph
+
+My_theme <- theme(text = element_text(family = "sans"),
+                  axis.title.x = element_text(size = 19),
+                  axis.text.x = element_text(size = 11.5),
+                  axis.title.y = element_text(size = 19),
+                  strip.text.x = element_text(size = 15),
+                  legend.text=element_text(size=8),
+                  legend.title=element_text(size=8))
+
+
+
+Shannon_filtered_bxp_coverage_based <- ggboxplot(
+  meta_alpha_filtered, x = "", y = "Shannon",
+  color = "", palette = c("blue","red"), add = "jitter", facet.by = "") +
+  ylim(0,NA)
+
+
+Shannon_filtered_bxp_coverage_based <- ggboxplot(
+  meta_alpha_filtered, x = "Group", y = "Shannon",
+  color = "Group", palette = c("blue", "red"), add = "jitter", facet.by = "Sex"
+) +
+  ylim(0, NA) +
+  theme(
+    axis.title.x = element_text(size = 15, face = "bold"),
+    axis.text.x = element_text(size = 15, face = "bold"),
+    axis.title.y = element_text(size = 15, face = "bold"),
+    axis.text.y = element_text(size = 15, face = "bold"),
+    strip.text = element_text(size = 15, face = "bold"),
+    legend.text=element_text(size=15, face = "bold"),
+    legend.title=element_text(size=15, face = "bold")
+  ) +
+  labs(
+    x = "",
+    y = "Shannon index"
+  )
+
+#Beta Diversity
+
+library("tidyverse")
+library("reshape2")    # Load the reshape2 package for converting between long and wide format data
+library("stringr")     # Load the stringr package for improved filtering of text
+#library("ape")         # Load the ape package for reading and modifying phylogenetic trees
+library("phyloseq")    # Load the phyloseq package for microbial community analysis
+library("data.table")  # Load the data.table package for better metadata manipulation
+#library("viridis")     # Load the viridis package for colour palettes for continuous data
+#library("qualpalr")    # Load the qualpalr package for colour palettes for qualitative data
+library("ggplot2")     # load the ggplot2 package for visualization of data
+library("vegan")       
+#library("gplots")      
+library("ggpubr")      
+library("ggforce")
+library("plyr")
+#library("lattice")
+library("Rmisc")
+#library("funrar")  ???
+library("permute")
+library("vegan")
+library("readr")
+library("forcats")
+library("RColorBrewer")
+library("ade4")
+library("cluster")
+library("clue")
+library("dada2")
+library("broom")
+library("viridisLite")
+library("seqinr")
+library("ShortRead")
+library("Biostrings")
+library("VennDiagram")
+library("DESeq2")
+#library("ggtree")
+library("aplot")
+library("tidyr")
+library("ggimage")
+library("lubridate")    #Add vertical line in time serie plot
+library("onewaytests")
+library("cowplot")
+library("qpdf")
+library("car")
+library("rstatix")
+#library("emmeans")
+#library("FSA") 
+
+#####################################################
+###             IMPORT PHYLOSEQ OBJECTS           ###
+#####################################################
+
+project_data_coverage_based <- readRDS(file="filtered_250_coverage_rarefied_averaged.RDS")
+
+###MAKE BETA INDEXES###
+
+#Extract metadata table
+NMDS <- as.data.frame(sample_data(project_data_coverage_based))
+NMDS$ <- factor(NMDS$, levels=c("", "")) 
+NMDS$ <- gsub("", "", NMDS$)
+#Create vector that contains all distance coefficient/index used for NMDS (only two, bray and jaccard)
+distance <- c("bray","jaccard")
+#Calculate all corrdinates for both distance methods (bray and jaccard)
+for (w in 1:length(distance)){
+  NMDS.distance <- ordinate(physeq = project_data_coverage_based, method = "NMDS", distance = distance[w])
+  coordinate.table <- as.data.frame(NMDS.distance$points)
+  row.names(coordinate.table) == row.names(NMDS) #sanity check #tests as true
+  NMDS$NMDS.cordinate1 <- coordinate.table$MDS1
+  NMDS$NMDS.cordinate2 <- coordinate.table$MDS2
+  NMDS$stress <- NMDS.distance$stress
+  colnames(NMDS)[which(colnames(NMDS) %in% "NMDS.cordinate1")] <- paste0("NMDS",".",distance[w],"","1")
+  colnames(NMDS)[which(colnames(NMDS) %in% "NMDS.cordinate2")] <- paste0("NMDS",".",distance[w],"","2")
+  colnames(NMDS)[which(colnames(NMDS) %in% "stress")] <- paste0("NMDS",".",distance[w],"_stress")
+  
+}
+
+#Make dataframe with Sample data and Beta Indexes
+sample_df <- data.frame(sample_data(project_data_coverage_based))
+sample_df$ <- factor(sample_df$, levels=c("", ""))
+sample_df$ <- gsub("", "", sample_df$)
+
+###################################################################
+###              ONE - WAY PERMANOVA (Prenatal Group)           ###
+###################################################################
+phyloseq_distance.bray <- phyloseq::distance(project_data_coverage_based, method = "bray")
+res.adonis.bray <- adonis2(phyloseq_distance.bray ~ , data=sample_df, method="bray", permutations = 10000)
+res.adonis.bray
+#Save PERMANOVA results as a seperate object
+
+r2 <- round(res.adonis.bray$R2[1],3)
+pval1 <- round(res.adonis.bray$`Pr(>F)`[1],4)
+title_bray <- paste0("R2= ",r2," Litter= ", pval1)
+
+
+#NMDS plot
+NMDS_bray <- ggplot(NMDS, aes(x=NMDS.bray1, y=NMDS.bray2, color = Litter)) + 
+  ggtitle(as.character(title_bray)) +
+  geom_point(aes(shape = Litter, color = Litter), size = 4)+
+  scale_shape_manual(values = c(16, 16))+
+  scale_color_manual(values = c("blue", "red"))+
+  stat_ellipse(level = 0.95, linetype = 2) +
+  theme_classic() +
+  theme(axis.text.x = element_text(size = 20), axis.text.y = element_text(size = 20), axis.title.y = element_text(size = 20), axis.title.x = element_text(size = 20)) 
