@@ -1,0 +1,266 @@
+
+library("tidyverse")
+library("reshape2")    # Load the reshape2 package for converting between long and wide format data
+library("stringr")     # Load the stringr package for improved filtering of text
+library("ape")         # Load the ape package for reading and modifying phylogenetic trees
+library("phyloseq")    # Load the phyloseq package for microbial community analysis
+library("data.table")  # Load the data.table package for better metadata manipulation
+library("viridis")     # Load the viridis package for colour palettes for continuous data
+library("qualpalr")    # Load the qualpalr package for colour palettes for qualitative data
+library("ggplot2")     # load the ggplot2 package for visualization of data
+library("vegan")       # 
+library("gplots")      #
+library("ggpubr")      #
+library("ggforce")
+library("plyr")
+library("lattice")
+library("Rmisc")
+library("funrar")
+library("permute")
+library("vegan")
+library("readr")
+library("forcats")
+library("RColorBrewer")
+library("ade4")
+library("cluster")
+library("clue")
+library("dada2")
+library("permute")
+library("broom")
+library("viridisLite")
+library("seqinr")
+library("ShortRead")
+library("Biostrings")
+library("VennDiagram")
+library("DESeq2")
+library("ggtree")
+library("aplot")
+library("tidyr")
+library("ggimage")
+library("lubridate") 
+library("onewaytests")
+library("cowplot")
+library("qpdf")
+library("car")
+library("rstatix")
+library("emmeans")
+#install.packages("remotes")
+#remotes::install_github("vmikk/metagMisc")
+library("metagMisc")
+
+#####################################################
+###             IMPORT DATA                       ###
+#####################################################
+
+##Import taxonomy
+asv_tax_spl.tbl <- read.table(".16s.merged.txt",
+                              sep="\t", header = T, stringsAsFactors = FALSE);str(asv_tax_spl.tbl)
+row.names(asv_tax_spl.tbl) <- asv_tax_spl.tbl$row_names  #Rename row.names with ASVs IDs
+asv_tax_spl.tbl[,1] <- NULL                              #Remove columns with ASVs IDs 
+
+#Change column names so matches metadata (Sample_data) format 
+
+for (i in 1:72){
+  
+  colnames(asv_tax_spl.tbl)[i] <-  gsub("X","S",colnames(asv_tax_spl.tbl[i]))
+}
+
+for (i in 1:72){
+  
+  colnames(asv_tax_spl.tbl)[i] <-  gsub("S0","S",colnames(asv_tax_spl.tbl[i]))
+}
+
+dim(asv_tax_spl.tbl)          #Check the dimension before removing 5 pups that are not P22 (Not of interest for this study)
+#628 79
+
+##Subset ASV taxonomy table
+tax <- c("Rank1","Rank2","Rank3","Rank4","Rank5","Rank6","Rank7")
+asv_tax.tbl <- asv_tax_spl.tbl[,which(colnames(asv_tax_spl.tbl) %in% tax)]
+#Convert NA into "Tax_un"
+asv_tax.tbl[is.na(asv_tax.tbl)] <- "Un"
+#create a function to paste "Un" to the name of the previous rank
+mypaste = function(s) {
+  s = gsub("_Un","",s)
+  return(paste0(s,"_Un"))
+}
+#apply the function to all ranks
+for (i in 2:7){
+  if (i == 7)
+  {
+    colName = "Rank7"
+    colNamePrevious = "Rank6"
+  } else
+  {
+    colName = paste0("Rank", i)
+    colNamePrevious = paste0("Rank", i-1)
+  }
+  
+  w = which(asv_tax.tbl[[colName]] == "Un")
+  asv_tax.tbl[[colName]][w] = mypaste(asv_tax.tbl[[colNamePrevious]][w])
+}
+#Convert dataframe into matrix (format needed for phyloseq)
+asv_tax.mtx <- as.matrix(asv_tax.tbl);dim(asv_tax.mtx)
+#
+
+#Subset ASV table
+asv_spl.tbl <- asv_tax_spl.tbl[,which(!colnames(asv_tax_spl.tbl) %in% tax)];dim(asv_spl.tbl)
+#
+
+#################################################   
+###              Import  Metadata             ###
+#################################################
+
+#PUPS METADATA
+
+spl_met_pup.tbl <- read.table(".txt", 
+                              sep="\t", header = TRUE);str(spl_met_pup.tbl)  #note that is is spl_met_pup.tbl so that this object is metadata for pups
+spl_met_pup.tbl$SampleID <- gsub("", "", spl_met_pup.tbl$SampleID)
+
+
+for (i in 1:72){
+  
+  spl_met_pup.tbl[i,1] <-  gsub("S0","S",spl_met_pup.tbl[i,1])
+}
+
+spl_met_pup.tbl
+
+row.names(spl_met_pup.tbl) <- spl_met_pup.tbl[,1]; dim(spl_met_pup.tbl)   #Change rownames to Pup_number
+#
+
+
+#################################################
+###             FILTERING                 ###
+#################################################
+
+
+#DOUBLE CHECK
+otu_pup <- data.frame(colnames(asv_spl.tbl))
+row.names(otu_pup) <- otu_pup$colnames.asv_spl.tbl.
+
+sam_pup <- data.frame(spl_met_pup.tbl$SampleID)
+row.names(sam_pup) <- sam_pup$colnames.asv_spl.tbl.
+
+#Compare ID between mum drinking and mom taxa
+
+#intersect(sam_pup,otu_pup)
+#intersect(otu_pup,sam_pup)
+
+setdiff(sam_pup,otu_pup)
+setdiff(otu_pup,sam_pup)
+
+###
+
+
+#Create phyloseq object
+metadata <- sample_data(spl_met_pup.tbl);dim(metadata)
+#
+otu <- otu_table(asv_spl.tbl, taxa_are_rows=TRUE);dim(otu)
+#
+tax <- tax_table(asv_tax.mtx);dim(tax)
+#
+project_data_pup <- phyloseq(metadata,otu,tax);project_data_pup 
+#RESULTS:
+
+
+
+#Filtering
+
+#Remove ASVs that are in groups that you wish to exclude (e.g. Chloroplast and Mitochondria), making sure that NAs within those Ranks are not removed in the process
+project_data_pup <- project_data_pup %>%
+  subset_taxa(Rank4 != "Chloroplast") %>% 
+  subset_taxa(Rank5 != "Mitochondria") %>% 
+  subset_taxa(Rank1 != "Eukaryota") %>% 
+  subset_taxa(Rank1 != "Unassigned");project_data_pup 
+# ASVs,  samples,  taxonomic ranks
+# ASV were removed 
+
+#Convert ASVs with counts of 2 or less to 0
+otu_conversion <- as.data.frame(otu_table(project_data_pup))
+otu_table(project_data_pup)[otu_conversion <= 2] <- 0 ;project_data_pup
+# taxa,  samples, taxonomic ranks
+
+#Prune ASV that have less than X total reads, X = 250
+project_data_pup <- prune_taxa(taxa_sums(project_data_pup) >= 250, project_data_pup);project_data_pup
+#
+
+#Rarefy to smallest number of ASV in a sample
+sample_sums(project_data_pup) # Look to see if there are samples with 0 total ASV's to remove before searhcing for lowest ASV count in a sample
+#
+
+saveRDS(project_data_pup, file="filtered_250.RDS")
+file.exists("filtered_250.RDS")
+#
+
+##################################
+### Coverage-based Rarefaction ###
+##################################
+
+#need to be TRUE
+taxa_are_rows(project_data_pup)
+
+### prepare otu table for function
+x <- metagMisc::prepare_inext(
+  as.data.frame(otu_table(project_data_pup)),
+  correct_singletons = T)
+
+View(as.data.frame(otu_table(project_data_pup)))
+
+### check if read counts are correct (samples should show "numeric" in the second column)
+
+SC <- plyr::llply(.data = x, .fun = function(z){ try( iNEXT:::Chat.Ind(z, sum(z)) ) })
+plyr::ldply(.data = SC, .fun = class)
+
+### run coverage-based rarefaction (Chao & Jost, 2012) correcting for singletons (Chiu & Chao 2016)
+### 1,000 iterations
+project_data_coverage_based_rarefied <- phyloseq_coverage_raref(physeq=project_data_pup, coverage = 0.8, iter = 1000, replace = F, correct_singletons = TRUE, drop_lowcoverage = F) 
+
+saveRDS(project_data_coverage_based_rarefied, file="filtered_250_coverage_rarefied.RDS")
+file.exists("filtered_250_coverage_rarefied.RDS")
+
+### Average otu tables from all iterations to get a final robust table ###
+subset_project_data_coverage_based_rarefied <- project_data_coverage_based_rarefied[c(1:1000)]
+
+### first, extract otu tables from phyloseq objects
+### this is how you do it for a single phyloseq object:
+### y <- as.data.frame(t(phyloseq::otu_table(all_16S_COVERAGE_RAREF)))
+### now do it for the list of phyloseq objects
+otu_tables_1000 <- lapply(subset_project_data_coverage_based_rarefied, function(z) as.data.frame(t(phyloseq::otu_table(z))))
+
+### average all matrices to get the mean abundance across all iterations
+average_otu_tables_1000 <- Reduce("+",otu_tables_1000)/length(otu_tables_1000)
+### IMPORTANT! NEED TO ROUND IT OTHERWISE iNEXT WILL NOT WORK!
+average_otu_tables_1000_round <- average_otu_tables_1000 %>% mutate_at(vars(starts_with("ASV")), funs(round(., 0)))
+### add SampleID column back
+average_otu_tables_1000_round$sample_id<- rownames(average_otu_tables_1000) 
+average_otu_tables_1000_round <- average_otu_tables_1000_round %>% 
+  select(sample_id, everything())
+write.csv(average_otu_tables_1000_round, file=".csv", quote=F, row.names=F )
+
+##### save as final phyloseq object #####
+## metadata
+metadata = as.matrix(project_data_pup@sam_data)
+metadata = as.data.frame((metadata))
+samples = sample_data(metadata)
+
+## TRANSPOSED asv table 
+otu_1000 = average_otu_tables_1000_round[,-1]
+# rename rows
+rownames(otu_1000) <- average_otu_tables_1000_round[,1]
+## as matrix an transpose
+otu_matrix = t(as.matrix(otu_1000))
+# format for phyloseq
+OTU = otu_table(otu_matrix, taxa_are_rows = TRUE)
+## taxonomy
+TAX = project_data_pup@tax_table
+
+## make the phyloseq object
+project_data_coverage_based_all_averaged = phyloseq(OTU, TAX, samples)
+#ASV, samples, taxonomic ranks
+project_data_coverage_based_all_averaged
+rank_names(project_data_coverage_based_all_averaged)
+sample_variables(project_data_coverage_based_all_averaged)
+
+project_data_coverage_based_all_averaged@sam_data$read_depth_rarefied = sample_sums(project_data_coverage_based_all_averaged)
+
+saveRDS(project_data_coverage_based_all_averaged, file="filtered_250_coverage_rarefied_averaged.RDS")
+
